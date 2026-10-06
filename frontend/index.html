@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Summary Generator</title>
+  <meta name="description" content="Turn your notes and textbooks into exam-focused lesson summaries using AI. Supports PDF, DOCX, PPTX, TXT, and image files.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    html, body { height: 100%; }
+    body {
+      max-width: 1100px !important;
+      width: 92% !important;
+      margin: 0 auto !important;
+      padding: 32px 0 64px !important;
+      box-sizing: border-box !important;
+      min-height: 100vh;
+    }
+    .section { box-sizing: border-box; }
+    @media (max-width: 700px) {
+      body { width: 94% !important; padding: 18px 0 48px !important; }
+      h1 { font-size: 24px !important; }
+      .option-grid { grid-template-columns: 1fr !important; }
+      .history-toolbar, .result-actions-row { flex-direction: column; align-items: stretch !important; }
+      #historySearch { width: 100% !important; }
+    }
+
+    .top-nav {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .top-nav a {
+      text-decoration: none;
+    }
+
+    .curriculum-select {
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      color: var(--ink);
+      background-color: #fff;
+      box-sizing: border-box;
+      transition: border-color 0.15s ease;
+      width: 100%;
+    }
+    .curriculum-select:focus { outline: none; border-color: var(--teal); }
+
+    .curriculum-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--teal-dark);
+      background-color: var(--teal-tint);
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+
+    .option-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .option-btn {
+      padding: 16px 10px;
+      font-family: inherit;
+      font-size: 15px;
+      background-color: var(--card-bg);
+      color: var(--ink-soft);
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: 0.15s ease;
+      font-weight: 600;
+    }
+    .option-btn:hover { border-color: var(--teal); background-color: var(--teal-tint); }
+    #numGrid .option-btn.selected { background-color: var(--teal); color: #fff; border-color: var(--teal); }
+    #diffGrid .option-btn[data-value="easy"].selected { background-color: var(--teal); color: #fff; border-color: var(--teal); }
+    #diffGrid .option-btn[data-value="moderate"].selected { background-color: var(--amber); color: #fff; border-color: var(--amber); }
+    #diffGrid .option-btn[data-value="hard"].selected { background-color: var(--coral); color: #fff; border-color: var(--coral); }
+
+    #customCount {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 12px;
+      width: 100%;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: 14.5px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      color: var(--ink);
+      background-color: #fff;
+      transition: border-color 0.15s ease;
+    }
+    #customCount:focus { outline: none; border-color: var(--teal); }
+
+    .drop-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 190px;
+      margin-top: 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      background-color: #FAFBFC;
+      text-align: center;
+      box-sizing: border-box;
+      transition: 0.15s ease;
+      padding: 16px;
+    }
+    .drop-zone:hover, .drop-zone.has-file { border-color: var(--teal); background-color: var(--teal-tint); }
+    .drop-zone svg { width: 36px; height: 36px; margin-bottom: 10px; color: var(--muted); }
+    .drop-zone.has-file svg { color: var(--teal); }
+    .drop-zone p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+    .drop-zone .dz-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    input[type="file"] { display: none; }
+
+    #generateWrap { text-align: center; background: none; border: none; padding: 0; margin-bottom: 24px; }
+    #generateBtn { padding: 14px 40px; font-size: 16px; }
+
+    #results { min-height: 250px; padding: 30px; }
+    #placeholderText { color: var(--muted); font-size: 15px; margin: 10px 0; }
+    #loadingText { display: none; color: var(--teal); font-weight: 600; text-align: center; margin: 16px 0; }
+    #errorText {
+      display: none; color: var(--coral); font-weight: 600; text-align: center;
+      background-color: var(--coral-tint); padding: 12px; border-radius: 6px; margin-bottom: 14px;
+    }
+
+    .validation-warning {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      background: #fffbeb;
+      border: 1.5px solid #f59e0b;
+      border-radius: 8px;
+      padding: 13px 16px;
+      margin-bottom: 18px;
+      font-size: 13.5px;
+      color: #92400e;
+      line-height: 1.5;
+    }
+    .validation-warning .vw-icon { font-size: 14px; font-weight: 700; flex-shrink: 0; margin-top: 2px; color: #b45309; }
+    .validation-warning strong { display: block; font-size: 13.5px; font-weight: 700; margin-bottom: 3px; color: #78350f; }
+
+    .result-actions-row {
+      display: none;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .overall-summary-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background-color: var(--card-bg);
+      margin-bottom: 28px;
+      overflow: hidden;
+      transition: box-shadow 0.15s ease;
+    }
+    .overall-summary-card:hover { box-shadow: 0 2px 8px rgba(31, 41, 55, 0.07); }
+    .overall-summary-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      background-color: #FAFBFC;
+      border-bottom: 1px solid var(--border);
+    }
+    .overall-summary-head-title {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .overall-summary-head-title .tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      background-color: var(--teal-tint);
+      color: var(--teal-dark);
+      border-radius: 4px;
+      border: 1px solid #c1deda;
+    }
+    .overall-summary-head-actions { display: flex; align-items: center; gap: 6px; }
+    .overall-summary-body { background: #fff; padding: 18px; }
+    .section-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 24px 0 16px;
+    }
+    .section-divider span {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--teal-dark);
+      white-space: nowrap;
+    }
+    .section-divider hr { flex: 1; border: none; border-top: 1.5px solid var(--border); margin: 0; }
+    .overall-bullet-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #EEF2F6;
+    }
+    .overall-bullet-item:last-child { border-bottom: none; }
+    .overall-bullet-item.lesson-sep {
+      border-bottom: none;
+      padding: 14px 0 4px;
+    }
+    .overall-lesson-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--teal-dark);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .overall-bullet-num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      background-color: var(--teal-tint);
+      color: var(--teal-dark);
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+    .overall-bullet-text {
+      font-size: 14.5px;
+      color: var(--ink);
+      line-height: 1.55;
+    }
+
+    .summary-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background-color: var(--card-bg);
+      margin-bottom: 14px;
+      overflow: hidden;
+      transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .summary-card:hover { box-shadow: 0 2px 8px rgba(31, 41, 55, 0.07); }
+
+    .summary-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 18px;
+      background-color: #FAFBFC;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    .summary-card-head:hover { background-color: var(--teal-tint); }
+    .summary-head-title {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .summary-head-badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      background-color: var(--teal-tint);
+      color: var(--teal-dark);
+      border-radius: 4px;
+      border: 1px solid #c1deda;
+    }
+    .summary-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 5px;
+      border: 1.5px solid var(--border);
+      background-color: #fff;
+      color: var(--ink-soft);
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+    .btn-sm:hover { border-color: var(--teal); background-color: var(--teal-tint); color: var(--teal-dark); }
+    .btn-sm.btn-danger { color: var(--coral); border-color: var(--coral); }
+    .btn-sm.btn-danger:hover { background-color: var(--coral-tint); }
+
+    .chevron-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--muted);
+      transition: transform 0.2s ease;
+    }
+    .summary-card.collapsed .chevron-icon { transform: rotate(-90deg); }
+    .summary-card.collapsed .summary-card-body { display: none; }
+
+    .summary-card-body { padding: 18px; }
+    .bullet-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .bullet-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #EEF2F6;
+      font-size: 14.5px;
+      line-height: 1.55;
+      color: var(--ink);
+    }
+    .bullet-item:last-child { border-bottom: none; }
+    .bullet-num {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      background-color: var(--teal-tint);
+      color: var(--teal-dark);
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+    .bullet-text { flex: 1; }
+
+    .history-toolbar { display: flex; gap: 10px; margin-top: 14px; align-items: center; }
+    #historySearch {
+      flex: 1; min-width: 200px; padding: 10px 12px; font-family: inherit; font-size: 14px;
+      border: 1.5px solid var(--border); border-radius: 6px; color: var(--ink); box-sizing: border-box;
+      transition: border-color 0.15s ease;
+    }
+    #historySearch:focus { outline: none; border-color: var(--teal); }
+    #historyStatus { color: var(--muted); font-size: 13.5px; margin-top: 10px; }
+
+    .history-batch {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 14px;
+      transition: box-shadow 0.15s ease;
+      background-color: var(--card-bg);
+    }
+    .history-batch:hover { box-shadow: 0 2px 8px rgba(31, 41, 55, 0.06); }
+    .history-batch-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .history-batch-meta { font-size: 13px; color: var(--ink-soft); }
+    .history-batch-meta strong { color: var(--ink); }
+    .history-batch-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .history-batch-content { display: none; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); }
+    .history-batch-content.expanded { display: block; }
+  </style>
+</head>
+<body>
+
+  <div class="top-nav">
+    <a href="database.html" class="btn btn-outline" target="_blank">View Database</a>
+  </div>
+
+  <h1>Summary <span>Generator</span></h1>
+  <p class="app-subtitle">Turn your notes and textbooks into exam-focused lesson summaries.</p>
+
+  <div class="section">
+    <h2>Curriculum</h2>
+    <div class="option-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+      <select id="boardSelect" class="curriculum-select" aria-label="Select Board"></select>
+      <select id="standardSelect" class="curriculum-select" aria-label="Select Standard"></select>
+      <select id="groupSelect" class="curriculum-select" aria-label="Select Group" style="display:none;"></select>
+      <select id="subjectSelect" class="curriculum-select" aria-label="Select Subject"></select>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Upload your notes</h2>
+    <label class="drop-zone" id="dropZone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 16V4M12 4L7 9M12 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p id="dropText">Drop your file here, or click to browse</p>
+      <p class="dz-sub">PDF, DOCX, PPTX, TXT, JPG, PNG</p>
+      <input type="file" id="fileInput" accept=".pdf,.docx,.pptx,.txt,.jpg,.jpeg,.png" aria-label="Choose file to upload">
+    </label>
+  </div>
+
+  <div class="section">
+    <h2>Select the Difficulty level of the Summary</h2>
+    <div class="option-grid" id="diffGrid">
+      <button class="option-btn" data-value="easy">Easy</button>
+      <button class="option-btn selected" data-value="moderate">Moderate</button>
+      <button class="option-btn" data-value="hard">Hard</button>
+    </div>
+  </div>
+
+
+  <div class="section" id="generateWrap">
+    <button id="generateBtn" class="btn btn-solid" disabled>Generate Summary</button>
+  </div>
+
+  <div class="section" id="results">
+    <h2>Your Summary from the uploaded File</h2>
+    <p id="placeholderText">Summaries will appear here.</p>
+    <p id="loadingText">Generating your summary, please wait...</p>
+    <p id="errorText"></p>
+
+    <div class="result-actions-row" id="resultActions">
+      <button id="copyAllBtn" class="btn btn-outline">Copy All</button>
+      <button id="downloadAllTxtBtn" class="btn btn-outline">Download All (TXT)</button>
+      <button id="downloadAllJsonBtn" class="btn btn-outline">Download All (JSON)</button>
+      <button id="downloadAllPdfBtn" class="btn btn-outline">Download All (PDF)</button>
+    </div>
+
+    <div id="summaryList"></div>
+  </div>
+
+  <div class="section">
+    <h2>Previously Generated Summaries</h2>
+    <button id="loadHistoryBtn" class="btn btn-outline">View All Saved Summaries</button>
+    <a href="database.html" target="_blank" style="text-decoration: none;">
+      <button class="btn btn-outline" style="margin-left: 10px;">View Database</button>
+    </a>
+    <div class="history-toolbar">
+      <input type="text" id="historySearch" aria-label="Search saved summaries" placeholder="Search your saved summaries by lesson name, subject, or keywords...">
+    </div>
+    <p id="historyStatus"></p>
+    <div id="historyList"></div>
+  </div>
+
+  <script>
+    const API = (['localhost', '127.0.0.1', ''].includes(window.location.hostname))
+      ? 'http://127.0.0.1:8000'
+      : 'https://qn-generator-backend.onrender.com';
+
+
+    const BOARDS = ['CBSE', 'Tamil Nadu State Board (Tamil Medium)', 'Tamil Nadu State Board (English Medium)'];
+    const STANDARDS = ['6th', '7th', '8th', '9th', '10th', '11th', '12th'];
+    const GROUPS = ['Bio Maths', 'Computer Science', 'Pure Science', 'Commerce'];
+    const SUBJECTS_DEFAULT = ['Tamil', 'English', 'Maths', 'Science', 'Social Science'];
+    const SUBJECTS_BY_GROUP = {
+      'Bio Maths':        ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Biology'],
+      'Computer Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Computer Science'],
+      'Pure Science':     ['Tamil', 'English', 'Physics', 'Chemistry', 'Botany', 'Zoology'],
+      'Commerce':         ['Tamil', 'English', 'Commerce', 'Economics', 'Accountancy', 'Computer Application']
+    };
+
+    const boardSelect    = document.getElementById('boardSelect');
+    const standardSelect = document.getElementById('standardSelect');
+    const groupSelect    = document.getElementById('groupSelect');
+    const subjectSelect  = document.getElementById('subjectSelect');
+
+    function isSeniorStandard(standard) { return standard === '11th' || standard === '12th'; }
+
+    function fillSelect(select, options, placeholder) {
+      select.innerHTML = '';
+      const ph = document.createElement('option'); ph.value = ''; ph.textContent = placeholder; select.appendChild(ph);
+      options.forEach(value => { const opt = document.createElement('option'); opt.value = value; opt.textContent = value; select.appendChild(opt); });
+    }
+
+    function refreshStandardDependentUI() {
+      const senior = isSeniorStandard(standardSelect.value);
+      groupSelect.style.display = senior ? '' : 'none';
+      if (!senior) { groupSelect.value = ''; fillSelect(subjectSelect, SUBJECTS_DEFAULT, 'Select subject'); }
+      else { const subjects = SUBJECTS_BY_GROUP[groupSelect.value] || []; fillSelect(subjectSelect, subjects, subjects.length ? 'Select subject' : 'Select a group first'); }
+      checkReady();
+    }
+
+    fillSelect(boardSelect,    BOARDS,           'Select board');
+    fillSelect(standardSelect, STANDARDS,        'Select standard');
+    fillSelect(groupSelect,    GROUPS,           'Select group');
+    fillSelect(subjectSelect,  SUBJECTS_DEFAULT, 'Select subject');
+
+    boardSelect.addEventListener('change', checkReady);
+    standardSelect.addEventListener('change', refreshStandardDependentUI);
+    groupSelect.addEventListener('change', refreshStandardDependentUI);
+    subjectSelect.addEventListener('change', checkReady);
+
+    function currentCurriculum() {
+      const standard = standardSelect.value;
+      const senior = isSeniorStandard(standard);
+      return { board: boardSelect.value, standard: standard, group_name: senior ? groupSelect.value : '', subject: subjectSelect.value };
+    }
+
+    function curriculumIsComplete() {
+      const c = currentCurriculum();
+      if (!c.board || !c.standard || !c.subject) return false;
+      if (isSeniorStandard(c.standard) && !c.group_name) return false;
+      return true;
+    }
+
+    const state = { file: null, difficulty: 'moderate' };
+    let lastSummaries = [];
+    let lastBatchMeta = {};
+    let lastJobId = null;
+    let allHistorySummaries = [];
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const dropText = document.getElementById('dropText');
+    const diffGrid = document.getElementById('diffGrid');
+    const generateBtn = document.getElementById('generateBtn');
+    const placeholderText = document.getElementById('placeholderText');
+    const loadingText = document.getElementById('loadingText');
+    const errorText = document.getElementById('errorText');
+    const resultActions = document.getElementById('resultActions');
+    const summaryList = document.getElementById('summaryList');
+    const copyAllBtn = document.getElementById('copyAllBtn');
+    const downloadAllTxtBtn = document.getElementById('downloadAllTxtBtn');
+    const downloadAllJsonBtn = document.getElementById('downloadAllJsonBtn');
+    const downloadAllPdfBtn = document.getElementById('downloadAllPdfBtn');
+    const loadHistoryBtn = document.getElementById('loadHistoryBtn');
+    const historySearch = document.getElementById('historySearch');
+    const historyStatus = document.getElementById('historyStatus');
+    const historyList = document.getElementById('historyList');
+
+    function setFile(file) {
+      state.file = file;
+      if (file) { dropText.textContent = file.name; dropZone.classList.add('has-file'); }
+      else { dropText.textContent = 'Drop your file here, or click to browse'; dropZone.classList.remove('has-file'); }
+      checkReady();
+    }
+
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('has-file'); });
+    dropZone.addEventListener('dragleave', () => { if (!state.file) dropZone.classList.remove('has-file'); });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; setFile(e.dataTransfer.files[0]); }
+    });
+
+    function setupGrid(grid, onSelect) {
+      grid.addEventListener('click', (e) => {
+        const btn = e.target.closest('.option-btn');
+        if (!btn) return;
+        grid.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        onSelect(btn.dataset.value);
+        checkReady();
+      });
+    }
+
+    setupGrid(diffGrid, (value) => { state.difficulty = value; });
+
+    function checkReady() {
+      generateBtn.disabled = !(state.file && curriculumIsComplete());
+    }
+
+    generateBtn.addEventListener('click', () => {
+      placeholderText.style.display = 'none'; errorText.style.display = 'none';
+      const oldBadge = document.getElementById('resultCurriculumBadge');
+      if (oldBadge) { oldBadge.remove(); }
+      summaryList.innerHTML = '';
+      loadingText.style.display = 'block';
+      const fileName = state.file ? state.file.name : 'file';
+      loadingText.textContent = `Uploading "${fileName}" and starting generation...`;
+      resultActions.style.display = 'none';
+      generateBtn.disabled = true;
+
+      const curriculum = currentCurriculum();
+      const formData = new FormData();
+      formData.append('file', state.file);
+      formData.append('board', curriculum.board);
+      formData.append('standard', curriculum.standard);
+      formData.append('subject', curriculum.subject);
+      formData.append('difficulty', state.difficulty || 'moderate');
+
+      const JOB_POLL_INTERVAL_MS = 1000;
+      const JOB_STATUS_LABELS = {
+        queued: 'Queued...',
+        extracting: `Reading and parsing "${fileName}"...`,
+        summarizing: `Generating exam bullet summaries from "${fileName}"...`,
+        saving: 'Saving summaries to database...',
+        generating_pdf: 'Generating downloadable lesson-wise PDF...',
+        done: 'Complete.'
+      };
+
+      function pollJobStatus(jobId) {
+        fetch(API + '/generate-summary/status/' + encodeURIComponent(jobId))
+          .then(r => { if (!r.ok) throw new Error('Server returned ' + r.status); return r.json(); })
+          .then(data => {
+            // Live progressive rendering of completed lesson cards as they arrive
+            if (data.partial_summaries && data.partial_summaries.length > 0) {
+              lastSummaries = data.partial_summaries;
+              lastBatchMeta = {
+                batch_id: data.batch_id || '',
+                board: data.board || curriculum.board,
+                standard: data.standard || curriculum.standard,
+                subject: data.subject || curriculum.subject,
+                language: data.language || '',
+                difficulty: data.difficulty || state.difficulty || 'moderate',
+                source_filename: data.source_filename || (state.file ? state.file.name : '')
+              };
+              let badge = document.getElementById('resultCurriculumBadge');
+              if (!badge) {
+                badge = document.createElement('div');
+                badge.id = 'resultCurriculumBadge';
+                badge.className = 'curriculum-badge';
+                summaryList.parentNode.insertBefore(badge, summaryList);
+              }
+              const metaParts = [
+                lastBatchMeta.source_filename ? `Document: ${lastBatchMeta.source_filename}` : '',
+                lastBatchMeta.board,
+                lastBatchMeta.standard,
+                lastBatchMeta.subject,
+                lastBatchMeta.difficulty ? `Difficulty: ${lastBatchMeta.difficulty}` : ''
+              ].filter(Boolean);
+              badge.textContent = metaParts.join(' · ');
+
+              const existingCount = summaryList.querySelectorAll('.summary-card').length;
+              if (existingCount !== data.partial_summaries.length) {
+                summaryList.innerHTML = '';
+                renderSummaries(summaryList, data.partial_summaries, lastBatchMeta);
+              }
+            }
+
+            if (data.status === 'done') {
+              loadingText.style.display = 'none';
+              lastJobId = data.job_id || jobId;
+              lastSummaries = data.summaries || [];
+              lastBatchMeta = {
+                batch_id: data.batch_id,
+                board: data.board || curriculum.board,
+                standard: data.standard || curriculum.standard,
+                subject: data.subject || curriculum.subject,
+                language: data.language || '',
+                difficulty: data.difficulty || state.difficulty || 'moderate',
+                source_filename: data.source_filename || (state.file ? state.file.name : '')
+              };
+              let badge = document.getElementById('resultCurriculumBadge');
+              if (!badge) {
+                badge = document.createElement('div');
+                badge.id = 'resultCurriculumBadge';
+                badge.className = 'curriculum-badge';
+                summaryList.parentNode.insertBefore(badge, summaryList);
+              }
+              const metaParts = [
+                lastBatchMeta.source_filename ? `Document: ${lastBatchMeta.source_filename}` : '',
+                lastBatchMeta.board,
+                lastBatchMeta.standard,
+                lastBatchMeta.subject,
+                lastBatchMeta.difficulty ? `Difficulty: ${lastBatchMeta.difficulty}` : ''
+              ].filter(Boolean);
+              badge.textContent = metaParts.join(' · ');
+              summaryList.innerHTML = '';
+
+              if (data.validation_warning) {
+                const vw = document.createElement('div');
+                vw.className = 'validation-warning';
+                vw.innerHTML = `<span class="vw-icon">!</span><div><strong>Warning: Some lessons could not be summarised</strong>${esc(data.validation_warning)}</div>`;
+                summaryList.appendChild(vw);
+              }
+
+              renderSummaries(summaryList, lastSummaries, lastBatchMeta);
+              resultActions.style.display = 'flex';
+              checkReady();
+            } else if (data.status === 'error') {
+              loadingText.style.display = 'none';
+              errorText.textContent = 'Something went wrong: ' + (data.detail || 'unknown error');
+              errorText.style.display = 'block';
+              checkReady();
+            } else {
+              const label = data.message || JOB_STATUS_LABELS[data.status] || 'Processing...';
+              const progress = (!data.message && data.total_lessons > 0) ? ` (${data.completed_lessons || 0}/${data.total_lessons} lessons)` : '';
+              loadingText.textContent = (data.completed_lessons > 0 ? 'Live: ' : '') + label + progress;
+              setTimeout(() => pollJobStatus(jobId), JOB_POLL_INTERVAL_MS);
+            }
+          })
+          .catch(err => {
+            loadingText.style.display = 'none';
+            errorText.textContent = 'Something went wrong: ' + err.message;
+            errorText.style.display = 'block';
+            checkReady();
+          });
+      }
+      fetch(API + '/generate-summary', { method: 'POST', body: formData })
+        .then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail || ('Server error: ' + r.status)); }); return r.json(); })
+        .then(data => { if (!data.job_id) throw new Error('Server did not return a job_id'); loadingText.textContent = `Queued "${fileName}" for generation...`; pollJobStatus(data.job_id); })
+        .catch(err => { loadingText.style.display = 'none'; errorText.textContent = 'Request failed: ' + err.message; errorText.style.display = 'block'; checkReady(); });
+    });
+
+
+    function renderSummaries(container, summaries, meta) {
+      if (!summaries || summaries.length === 0) {
+        if (!container.hasChildNodes()) container.innerHTML = '<p style="color:var(--muted); font-size:14.5px;">No summaries were generated.</p>';
+        return;
+      }
+      const divider = document.createElement('div');
+      divider.className = 'section-divider';
+      divider.innerHTML = `<span>Lesson-wise Summaries</span><hr>`;
+      container.appendChild(divider);
+      summaries.forEach((s, idx) => {
+        const card = document.createElement('div'); card.className = 'summary-card';
+        const head = document.createElement('div'); head.className = 'summary-card-head';
+        head.innerHTML = `<div class="summary-head-title"><span>Lesson ${esc(s.lesson_number)} – ${esc(s.lesson_name)}</span><span class="summary-head-badge">${(s.bullets || []).length} Points</span></div><div class="summary-head-actions"><button class="btn-sm" onclick="copyLessonSummary(event, ${idx})">Copy</button><button class="btn-sm" onclick="downloadLessonTxt(event, ${idx})">TXT</button><button class="btn-sm" onclick="downloadLessonJson(event, ${idx})">JSON</button><button class="btn-sm" onclick="downloadLessonPdf(event, ${idx})">PDF</button><svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg></div>`;
+        head.addEventListener('click', (e) => { if (e.target.closest('button')) return; card.classList.toggle('collapsed'); });
+        const body = document.createElement('div'); body.className = 'summary-card-body';
+        const ul = document.createElement('ul'); ul.className = 'bullet-list';
+        (s.bullets || []).forEach((b, i) => { const li = document.createElement('li'); li.className = 'bullet-item'; li.innerHTML = `<div class="bullet-num">${i + 1}</div><div class="bullet-text">${esc(b)}</div>`; ul.appendChild(li); });
+        body.appendChild(ul); card.appendChild(head); card.appendChild(body); container.appendChild(card);
+      });
+    }
+
+    function getDocBaseName(filename, fallback) {
+      if (filename) {
+        const base = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_\u0B80-\u0BFF-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+        if (base) return base;
+      }
+      return (fallback || 'Document').replace(/[^a-zA-Z0-9_\u0B80-\u0BFF-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '') || 'Document';
+    }
+
+    function formatLessonText(s, meta) {
+      const doc = meta.source_filename || (lastBatchMeta && lastBatchMeta.source_filename) || '';
+      const b = meta.board || (lastBatchMeta && lastBatchMeta.board) || '';
+      const st = meta.standard || (lastBatchMeta && lastBatchMeta.standard) || '';
+      const sub = meta.subject || (lastBatchMeta && lastBatchMeta.subject) || '';
+      const div = '-'.repeat(55);
+      return [
+        div,
+        ...(doc ? [`Document : ${doc}`] : []),
+        `Board    : ${b}`,
+        `Standard : ${st}`,
+        `Subject  : ${sub}`,
+        `Lesson   : ${s.lesson_number} – ${s.lesson_name}`,
+        div,
+        '',
+        ...(s.bullets || []).map((bullet, i) => `  ${i + 1}. ${bullet}`),
+        ''
+      ].join('\n');
+    }
+
+    function formatLessonJson(s, meta) {
+      return {
+        source_document: meta.source_filename || (lastBatchMeta && lastBatchMeta.source_filename) || '',
+        board: meta.board || (lastBatchMeta && lastBatchMeta.board) || '',
+        standard: meta.standard || (lastBatchMeta && lastBatchMeta.standard) || '',
+        subject: meta.subject || (lastBatchMeta && lastBatchMeta.subject) || '',
+        lesson_number: s.lesson_number,
+        lesson_name: s.lesson_name,
+        language: s.language || (meta && meta.language) || (lastBatchMeta && lastBatchMeta.language) || '',
+        difficulty: s.difficulty || (meta && meta.difficulty) || (lastBatchMeta && lastBatchMeta.difficulty) || 'moderate',
+        bullets: s.bullets || []
+      };
+    }
+
+    function triggerDownload(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function triggerBlobDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    // Converts Unicode characters unsupported by jsPDF's Helvetica font into ASCII equivalents
+    function sanitizeForPdf(str) {
+      if (!str) return str;
+      const sup = {'⁰':'^0','¹':'^1','²':'^2','³':'^3','⁴':'^4','⁵':'^5','⁶':'^6','⁷':'^7','⁸':'^8','⁹':'^9','⁻':'^-','⁺':'^+','ⁿ':'^n'};
+      const sub = {'₀':'_0','₁':'_1','₂':'_2','₃':'_3','₄':'_4','₅':'_5','₆':'_6','₇':'_7','₈':'_8','₉':'_9'};
+      const misc = {'×':'x','÷':'/','−':'-','–':'-','—':'-','≈':'~=','≠':'!=','≤':'<=','≥':'>=','≪':'<<','≫':'>>','∞':'inf','α':'alpha','β':'beta','γ':'gamma','δ':'delta','θ':'theta','λ':'lambda','μ':'mu','π':'pi','σ':'sigma','Ω':'ohm','ε':'epsilon','→':'->','←':'<-','⇒':'=>','•':'*','°':' deg','µ':'u','Å':'A','½':'1/2','¼':'1/4','¾':'3/4','⁄':'/','±':'+/-','∇':'nabla','∂':'d','∫':'integral','√':'sqrt(','⟨':'<','⟩':'>',' ':' ','’':"'",'‘':"'",'“':'"','”':'"'};
+      return str.split('').map(ch => sup[ch] || sub[ch] || misc[ch] || (ch.charCodeAt(0) > 127 ? '?' : ch)).join('');
+    }
+
+    async function generateSummaryPdf(lessons, meta, filename) {
+      // 1. Prefer high-fidelity server-side ReportLab generation with full Unicode/Tamil support
+      try {
+        const resp = await fetch(API + '/export-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lessons: lessons,
+            source_filename: (meta && meta.source_filename) || '',
+            board: (meta && meta.board) || '',
+            standard: (meta && meta.standard) || '',
+            subject: (meta && meta.subject) || '',
+            difficulty: (meta && meta.difficulty) || 'moderate'
+          })
+        });
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename || 'summary.pdf';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          return;
+        }
+      } catch (serverErr) {
+        console.warn('Server PDF export unreachable, falling back to client jsPDF:', serverErr);
+      }
+
+      if (window.jspdf && window.jspdf.jsPDF) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const pageWidth  = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const marginL = 44;          // left margin
+        const marginR = 44;          // right margin
+        const marginT = 44;          // top margin (after header on new pages)
+        const contentWidth = pageWidth - marginL - marginR;
+        const lineH  = 14;           // body line height
+        const footerH = 28;          // space reserved for footer
+        let y = marginT;
+
+        function ensureSpace(needed) {
+          if (y + needed > pageHeight - footerH) {
+            doc.addPage();
+            y = marginT;
+          }
+        }
+
+        function drawHRule(color) {
+          color = color || [210, 210, 210];
+          doc.setDrawColor(...color);
+          doc.setLineWidth(0.5);
+          doc.line(marginL, y, marginL + contentWidth, y);
+          y += 6;
+        }
+
+        doc.setFillColor(30, 90, 80);
+        doc.rect(marginL, y, contentWidth, 30, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(255, 255, 255);
+        doc.text('EXAM LESSON SUMMARY NOTES', marginL + 10, y + 20);
+        y += 38;
+
+        const docName   = meta.source_filename ? `Document: ${meta.source_filename}` : '';
+        const boardLine = [meta.board, meta.standard, meta.subject].filter(Boolean).join('  |  ');
+        const diffLine  = meta.difficulty ? `Difficulty: ${meta.difficulty}` : '';
+
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 40);
+        if (docName) {
+          doc.setFont('helvetica', 'bold');
+          doc.text(docName, marginL, y);
+          y += lineH;
+        }
+        if (boardLine) {
+          doc.setFont('helvetica', 'normal');
+          doc.text(boardLine + (diffLine ? '  |  ' + diffLine : ''), marginL, y);
+          y += lineH;
+        }
+        y += 6;
+        drawHRule();
+        y += 4;
+
+        if (lessons && lessons.length > 0) {
+          ensureSpace(40);
+
+          doc.setFillColor(245, 247, 246);
+          doc.rect(marginL, y, contentWidth, 22, 'F');
+          doc.setDrawColor(180, 200, 196);
+          doc.setLineWidth(0.5);
+          doc.rect(marginL, y, contentWidth, 22, 'S');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(20, 80, 70);
+          doc.text('LESSON-WISE SUMMARIES', marginL + 8, y + 14);
+          y += 28;
+
+          lessons.forEach(l => {
+            ensureSpace(36);
+
+            doc.setFillColor(237, 245, 243);
+            doc.rect(marginL, y, contentWidth, 20, 'F');
+            doc.setDrawColor(180, 200, 196);
+            doc.setLineWidth(0.5);
+            doc.rect(marginL, y, contentWidth, 20, 'S');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.setTextColor(20, 80, 70);
+            const lTitle = `Lesson ${l.lesson_number}  –  ${l.lesson_name || 'Summary'}`;
+            const titleLines = doc.splitTextToSize(lTitle, contentWidth - 12);
+            doc.text(titleLines, marginL + 6, y + 13);
+            y += titleLines.length > 1 ? titleLines.length * 12 + 8 : 26;
+
+            (l.bullets || []).forEach((bullet, bIdx) => {
+              const numStr  = `${bIdx + 1}.`;
+              const indent  = 22;
+              const wrapped = doc.splitTextToSize(bullet, contentWidth - indent);
+              const rowH    = wrapped.length * lineH + 4;
+              ensureSpace(rowH);
+
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(9.5);
+              doc.setTextColor(20, 80, 70);
+              doc.text(numStr, marginL, y);
+
+              doc.setFont('helvetica', 'normal');
+              doc.setTextColor(35, 35, 35);
+              doc.text(wrapped, marginL + indent, y);
+
+              y += rowH;
+            });
+            y += 10;
+          });
+        }
+
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          doc.setPage(i);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 14, { align: 'center' });
+        }
+
+        doc.save(filename);
+
+      } else {
+        // Fallback: open print-ready HTML window
+        const win = window.open('', '_blank');
+        if (!win) { alert('Pop-up blocked. Please allow pop-ups for this page to download the PDF.'); return; }
+        const lessonHTML = (lessons || []).map(l =>
+          `<div class="lesson">
+             <h2>Lesson ${esc(l.lesson_number)}: ${esc(l.lesson_name || 'Summary')}</h2>
+             <ol>${(l.bullets || []).map(b => `<li>${esc(b)}</li>`).join('')}</ol>
+           </div>`
+        ).join('');
+        const content = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${esc(filename)}</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; padding: 32px; color: #222; max-width: 820px; margin: 0 auto; line-height: 1.55; }
+    h1 { font-size: 18px; color: #1a5c52; margin-bottom: 4px; border-bottom: 2px solid #1a5c52; padding-bottom: 6px; }
+    .meta { font-size: 12px; color: #555; margin-bottom: 20px; }
+    .lesson { margin-bottom: 22px; page-break-inside: avoid; }
+    h2 { font-size: 13.5px; color: #1a5c52; margin: 0 0 8px 0; }
+    ol { padding-left: 20px; margin: 0; }
+    li { font-size: 13px; margin-bottom: 5px; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <h1>Exam Lesson Summary Notes</h1>
+  <div class="meta">${meta.source_filename ? `Document: ${esc(meta.source_filename)} &nbsp;&middot;&nbsp; ` : ''}${esc([meta.board, meta.standard, meta.subject].filter(Boolean).join(' · '))}</div>
+  ${lessonHTML}
+  <script>window.onload = function() { window.print(); }<\/script>
+</body>
+</html>`;
+        win.document.write(content);
+        win.document.close();
+      }
+    }
+
+    window.copyLessonSummary = function(e, idx) {
+      e.stopPropagation();
+      const s = lastSummaries[idx];
+      const text = formatLessonText(s, lastBatchMeta);
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = e.currentTarget;
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 1800);
+      });
+    };
+
+    window.downloadLessonTxt = function(e, idx) {
+      e.stopPropagation();
+      const s = lastSummaries[idx];
+      const text = formatLessonText(s, lastBatchMeta);
+      const docBase = getDocBaseName(lastBatchMeta.source_filename, [lastBatchMeta.board, lastBatchMeta.standard, lastBatchMeta.subject].filter(Boolean).join('_'));
+      const safeName = `${docBase}_Lesson_${s.lesson_number}_summary.txt`;
+      triggerDownload(text, safeName, 'text/plain;charset=utf-8');
+    };
+
+    window.downloadLessonJson = function(e, idx) {
+      e.stopPropagation();
+      const s = lastSummaries[idx];
+      const data = formatLessonJson(s, lastBatchMeta);
+      const docBase = getDocBaseName(lastBatchMeta.source_filename, [lastBatchMeta.board, lastBatchMeta.standard, lastBatchMeta.subject].filter(Boolean).join('_'));
+      const safeName = `${docBase}_Lesson_${s.lesson_number}_summary.json`;
+      triggerDownload(JSON.stringify(data, null, 2), safeName, 'application/json;charset=utf-8');
+    };
+
+    window.downloadLessonPdf = function(e, idx) {
+      e.stopPropagation();
+      const s = lastSummaries[idx];
+      const docBase = getDocBaseName(lastBatchMeta.source_filename, [lastBatchMeta.board, lastBatchMeta.standard, lastBatchMeta.subject].filter(Boolean).join('_'));
+      const safeName = `${docBase}_Lesson_${s.lesson_number}_summary.pdf`;
+      generateSummaryPdf([s], lastBatchMeta, safeName);
+    };
+
+    function buildFullSummaryText() {
+      let out = '';
+      if (lastSummaries && lastSummaries.length > 0) {
+        out += 'EXAM REVISION NOTES\n';
+        out += 'LESSON-WISE SUMMARIES\n\n';
+        lastSummaries.forEach(s => {
+          out += `LESSON ${s.lesson_number} — ${s.lesson_name}\n\n`;
+          (s.bullets || []).forEach((b, idx) => {
+            out += `  ${idx + 1}. ${b}\n`;
+          });
+          out += '\n\n';
+        });
+      }
+      return out.trim();
+    }
+
+    if (copyAllBtn) {
+      copyAllBtn.addEventListener('click', () => {
+        if (!lastSummaries.length) return;
+        const body = buildFullSummaryText();
+        navigator.clipboard.writeText(body).then(() => {
+          const orig = copyAllBtn.textContent;
+          copyAllBtn.textContent = 'Copied!';
+          setTimeout(() => { copyAllBtn.textContent = orig; }, 1800);
+        });
+      });
+    }
+
+    downloadAllTxtBtn.addEventListener('click', () => {
+      if (!lastSummaries.length) return;
+      const body = buildFullSummaryText();
+      const docBase = getDocBaseName(lastBatchMeta.source_filename, [lastBatchMeta.board, lastBatchMeta.standard, lastBatchMeta.subject].filter(Boolean).join('_'));
+      const name = `${docBase}_summary.txt`;
+      triggerDownload(body, name, 'text/plain;charset=utf-8');
+    });
+
+    downloadAllJsonBtn.addEventListener('click', () => {
+      if (!lastSummaries.length) return;
+      const data = {
+        source_document: lastBatchMeta.source_filename || '',
+        board: lastBatchMeta.board,
+        standard: lastBatchMeta.standard,
+        subject: lastBatchMeta.subject,
+        difficulty: lastBatchMeta.difficulty || 'moderate',
+        language: lastBatchMeta.language,
+        generated_at: new Date().toISOString(),
+        lessons: lastSummaries.map(s => formatLessonJson(s, lastBatchMeta))
+      };
+      const docBase = getDocBaseName(lastBatchMeta.source_filename, [lastBatchMeta.board, lastBatchMeta.standard, lastBatchMeta.subject].filter(Boolean).join('_'));
+      const name = `${docBase}_summary.json`;
+      triggerDownload(JSON.stringify(data, null, 2), name, 'application/json;charset=utf-8');
+    });
+
+    downloadAllPdfBtn.addEventListener('click', async () => {
+      if (!lastSummaries.length) return;
+      const originalText = downloadAllPdfBtn.textContent;
+      downloadAllPdfBtn.disabled = true;
+      downloadAllPdfBtn.textContent = 'Generating PDF...';
+
+      const docBase = getDocBaseName(lastBatchMeta.source_filename, [lastBatchMeta.board, lastBatchMeta.standard, lastBatchMeta.subject].filter(Boolean).join('_'));
+      const name = `${docBase}_summary.pdf`;
+
+      try {
+        let pdfDownloaded = false;
+
+        // 1. Try job endpoint via fetch blob
+        if (lastJobId) {
+          try {
+            const resp = await fetch(API + '/generate-summary/pdf/' + encodeURIComponent(lastJobId));
+            if (resp.ok) {
+              const blob = await resp.blob();
+              triggerBlobDownload(blob, name);
+              pdfDownloaded = true;
+            }
+          } catch (e) {
+            console.warn('Job PDF download failed:', e);
+          }
+        }
+
+        // 2. Try batch endpoint via fetch blob
+        if (!pdfDownloaded && lastBatchMeta && lastBatchMeta.batch_id) {
+          try {
+            const resp = await fetch(API + '/summaries/batch/' + encodeURIComponent(lastBatchMeta.batch_id) + '/pdf');
+            if (resp.ok) {
+              const blob = await resp.blob();
+              triggerBlobDownload(blob, name);
+              pdfDownloaded = true;
+            }
+          } catch (e) {
+            console.warn('Batch PDF download failed:', e);
+          }
+        }
+
+        // 3. Fallback to /export-pdf with current in-memory summaries
+        if (!pdfDownloaded) {
+          await generateSummaryPdf(lastSummaries, lastBatchMeta, name);
+        }
+      } catch (err) {
+        console.error('Download PDF error:', err);
+        alert('Failed to download PDF: ' + err.message);
+      } finally {
+        downloadAllPdfBtn.disabled = false;
+        downloadAllPdfBtn.textContent = originalText;
+      }
+    });
+
+
+    async function loadHistory() {
+      historyStatus.textContent = 'Loading saved summaries...';
+      try {
+        const res = await fetch(API + '/summaries');
+        if (!res.ok) throw new Error('Failed to fetch: ' + res.status);
+        const data = await res.json();
+        allHistorySummaries = data.summaries || [];
+        renderHistoryBatches(allHistorySummaries);
+      } catch (err) {
+        historyStatus.textContent = 'Could not load summaries: ' + err.message;
+        historyStatus.style.color = 'var(--coral)';
+      }
+    }
+
+    loadHistoryBtn.addEventListener('click', loadHistory);
+
+    historySearch.addEventListener('input', () => {
+      const q = historySearch.value.trim().toLowerCase();
+      if (!q) {
+        renderHistoryBatches(allHistorySummaries);
+        return;
+      }
+      const filtered = allHistorySummaries.filter(s => {
+        const matchText = [
+          s.board, s.standard, s.subject, s.lesson_number, s.lesson_name, s.source_filename,
+          ...(s.bullets || [])
+        ].join(' ').toLowerCase();
+        return matchText.includes(q);
+      });
+      renderHistoryBatches(filtered);
+    });
+
+    function groupSummariesIntoBatches(summaries) {
+      const groups = new Map();
+      summaries.forEach(s => {
+        const batchKey = s.batch_id || `${s.board}|${s.standard}|${s.subject}|${s.created_at}`;
+        if (!groups.has(batchKey)) {
+          groups.set(batchKey, {
+            batch_id: s.batch_id,
+            board: s.board,
+            standard: s.standard,
+            subject: s.subject,
+            language: s.language,
+            difficulty: s.difficulty,
+            source_filename: s.source_filename,
+            created_at: s.created_at,
+            lessons: []
+          });
+        }
+        const g = groups.get(batchKey);
+        g.lessons.push(s);
+      });
+      return Array.from(groups.values()).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    }
+
+    function renderHistoryBatches(summaries) {
+      historyList.innerHTML = '';
+      if (!summaries.length) {
+        historyStatus.textContent = allHistorySummaries.length === 0
+          ? 'No summaries have been saved yet.'
+          : 'No saved summaries match your search.';
+        historyStatus.style.color = 'var(--muted)';
+        return;
+      }
+
+      const batches = groupSummariesIntoBatches(summaries);
+      historyStatus.textContent = `${batches.length} batch(es), ${summaries.length} lesson summary(ies) total.`;
+      historyStatus.style.color = 'var(--ink-soft)';
+
+      batches.forEach(batch => {
+        const card = document.createElement('div');
+        card.className = 'history-batch';
+
+        const timeStr = batch.created_at ? batch.created_at.replace('T', ' ').slice(0, 19) : 'Unknown time';
+        const totalBullets = batch.lessons.reduce((acc, l) => acc + ((l.bullets && l.bullets.length) || 0), 0);
+        const metaStr = [
+          batch.source_filename ? `Document: ${batch.source_filename}` : '',
+          batch.board,
+          batch.standard,
+          batch.subject,
+          batch.difficulty ? `Difficulty: ${batch.difficulty}` : ''
+        ].filter(Boolean).join(' · ');
+
+        const header = document.createElement('div');
+        header.className = 'history-batch-header';
+        header.innerHTML = `
+          <div class="history-batch-meta">
+            <div><strong>${esc(metaStr)}</strong></div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">
+              ${esc(timeStr)} · ${batch.lessons.length} lesson(s) · ${totalBullets} points total
+            </div>
+          </div>
+          <div class="history-batch-actions">
+            <button class="btn-sm" onclick="toggleBatchView(this)">View Summaries</button>
+            <button class="btn-sm" onclick="downloadBatchTxt(this)">Download TXT</button>
+            <button class="btn-sm" onclick="downloadBatchJson(this)">Download JSON</button>
+            <button class="btn-sm" onclick="downloadBatchPdf(this)">Download PDF</button>
+            ${batch.batch_id ? `<button class="btn-sm btn-danger" onclick="deleteBatch('${batch.batch_id}')">Delete</button>` : ''}
+          </div>
+        `;
+
+        const content = document.createElement('div');
+        content.className = 'history-batch-content';
+
+        batch.lessons.forEach(l => {
+          const lCard = document.createElement('div');
+          lCard.className = 'summary-card';
+          lCard.innerHTML = `
+            <div class="summary-card-head">
+              <div class="summary-head-title">
+                <span>Lesson ${esc(l.lesson_number)}: ${esc(l.lesson_name)}</span>
+                <span class="summary-head-badge">${(l.bullets || []).length} Points</span>
+              </div>
+              <div class="summary-head-actions">
+                <button class="btn-sm" onclick="copyHistoryLesson(event, this)">Copy</button>
+                <button class="btn-sm" onclick="downloadHistoryLessonTxt(event, this)">TXT</button>
+                <button class="btn-sm" onclick="downloadHistoryLessonJson(event, this)">JSON</button>
+                <button class="btn-sm" onclick="downloadHistoryLessonPdf(event, this)">PDF</button>
+                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </div>
+            </div>
+            <div class="summary-card-body">
+              <ul class="bullet-list">
+                ${(l.bullets || []).map((b, i) => `
+                  <li class="bullet-item">
+                    <div class="bullet-num">${i + 1}</div>
+                    <div class="bullet-text">${esc(b)}</div>
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          `;
+          lCard._lessonData = l;
+          lCard._batchMeta = batch;
+
+          const head = lCard.querySelector('.summary-card-head');
+          head.addEventListener('click', (e) => {
+            if (e.target.closest('button')) return;
+            lCard.classList.toggle('collapsed');
+          });
+
+          content.appendChild(lCard);
+        });
+
+        card._batchData = batch;
+        card.appendChild(header);
+        card.appendChild(content);
+        historyList.appendChild(card);
+      });
+    }
+
+    window.copyHistoryLesson = function(e, btn) {
+      e.stopPropagation();
+      const card = btn.closest('.summary-card');
+      const lesson = card._lessonData;
+      const meta = card._batchMeta || {};
+      const text = formatLessonText(lesson, meta);
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 1800);
+      });
+    };
+
+    window.downloadHistoryLessonTxt = function(e, btn) {
+      e.stopPropagation();
+      const card = btn.closest('.summary-card');
+      const lesson = card._lessonData;
+      const meta = card._batchMeta || {};
+      const text = formatLessonText(lesson, meta);
+      const docBase = getDocBaseName(meta.source_filename || lesson.source_filename, [meta.board, meta.standard, meta.subject].filter(Boolean).join('_'));
+      const safeName = `${docBase}_Lesson_${lesson.lesson_number}_summary.txt`;
+      triggerDownload(text, safeName, 'text/plain;charset=utf-8');
+    };
+
+    window.downloadHistoryLessonJson = function(e, btn) {
+      e.stopPropagation();
+      const card = btn.closest('.summary-card');
+      const lesson = card._lessonData;
+      const meta = card._batchMeta || {};
+      const data = formatLessonJson(lesson, meta);
+      const docBase = getDocBaseName(meta.source_filename || lesson.source_filename, [meta.board, meta.standard, meta.subject].filter(Boolean).join('_'));
+      const safeName = `${docBase}_Lesson_${lesson.lesson_number}_summary.json`;
+      triggerDownload(JSON.stringify(data, null, 2), safeName, 'application/json;charset=utf-8');
+    };
+
+    window.downloadHistoryLessonPdf = function(e, btn) {
+      e.stopPropagation();
+      const card = btn.closest('.summary-card');
+      const lesson = card._lessonData;
+      const meta = card._batchMeta || {};
+      const docBase = getDocBaseName(meta.source_filename || lesson.source_filename, [meta.board, meta.standard, meta.subject].filter(Boolean).join('_'));
+      const safeName = `${docBase}_Lesson_${lesson.lesson_number}_summary.pdf`;
+      generateSummaryPdf([lesson], meta, safeName);
+    };
+
+    window.toggleBatchView = function(btn) {
+      const card = btn.closest('.history-batch');
+      const content = card.querySelector('.history-batch-content');
+      content.classList.toggle('expanded');
+      btn.textContent = content.classList.contains('expanded') ? 'Hide Summaries' : 'View Summaries';
+    };
+
+    window.downloadBatchTxt = function(btn) {
+      const card = btn.closest('.history-batch');
+      const batch = card._batchData;
+      if (!batch || !batch.lessons.length) return;
+      const sep = '\n\n' + '='.repeat(60) + '\n\n';
+      const body = batch.lessons.map(s => formatLessonText(s, batch)).join(sep);
+      const docBase = getDocBaseName(batch.source_filename, [batch.board, batch.standard, batch.subject].filter(Boolean).join('_'));
+      const name = `${docBase}_summary.txt`;
+      triggerDownload(body, name, 'text/plain;charset=utf-8');
+    };
+
+    window.downloadBatchJson = function(btn) {
+      const card = btn.closest('.history-batch');
+      const batch = card._batchData;
+      if (!batch || !batch.lessons.length) return;
+      const data = {
+        source_document: batch.source_filename || '',
+        board: batch.board,
+        standard: batch.standard,
+        subject: batch.subject,
+        difficulty: batch.difficulty || 'moderate',
+        language: batch.language,
+        created_at: batch.created_at,
+        lessons: batch.lessons.map(s => formatLessonJson(s, batch))
+      };
+      const docBase = getDocBaseName(batch.source_filename, [batch.board, batch.standard, batch.subject].filter(Boolean).join('_'));
+      const name = `${docBase}_summary.json`;
+      triggerDownload(JSON.stringify(data, null, 2), name, 'application/json;charset=utf-8');
+    };
+
+    window.downloadBatchPdf = function(btn) {
+      const card = btn.closest('.history-batch');
+      const batch = card._batchData;
+      if (!batch || !batch.lessons.length) return;
+      if (batch.batch_id) {
+        window.location.href = API + '/summaries/batch/' + encodeURIComponent(batch.batch_id) + '/pdf';
+      } else {
+        const docBase = getDocBaseName(batch.source_filename, [batch.board, batch.standard, batch.subject].filter(Boolean).join('_'));
+        const name = `${docBase}_summary.pdf`;
+        generateSummaryPdf(batch.lessons, batch, name);
+      }
+    };
+
+    window.deleteBatch = async function(batchId) {
+      if (!confirm('Are you sure you want to delete this summary batch? This cannot be undone.')) return;
+      try {
+        const res = await fetch(API + '/summaries/batch/' + encodeURIComponent(batchId), { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        loadHistory();
+      } catch (err) {
+        alert('Could not delete batch: ' + err.message);
+      }
+    };
+
+    function esc(s) {
+      return String(s || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+  </script>
+</body>
+</html>

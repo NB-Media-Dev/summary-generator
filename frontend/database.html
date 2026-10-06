@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Question Database</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    html, body { height: 100%; }
+    body {
+      max-width: 1200px !important;
+      width: 94% !important;
+      margin: 0 auto !important;
+      padding: 32px 0 64px !important;
+      box-sizing: border-box !important;
+      min-height: 100vh;
+    }
+    .section { box-sizing: border-box; }
+    @media (max-width: 700px) {
+      body { width: 95% !important; padding: 18px 0 48px !important; }
+      h1 { font-size: 24px !important; }
+      .filter-row { flex-direction: column; align-items: stretch; }
+      .filter-row input[type="text"], .filter-row select { width: 100% !important; }
+      .file-group-actions, .push-live-wrap { flex-direction: column; align-items: stretch !important; }
+    }
+
+    a.back-link { display: inline-block; margin-bottom: 16px; color: var(--teal); font-weight: 600; text-decoration: none; font-size: 14px; }
+    a.back-link:hover { text-decoration: underline; }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-danger { background-color: #fff; color: var(--coral); border: 1.5px solid var(--coral); }
+    .btn-danger:hover:not(:disabled) { background-color: var(--coral-tint); }
+    .btn-small { padding: 6px 12px; font-size: 12.5px; }
+
+    .filter-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+    .filter-row input[type="text"], .filter-row select {
+      flex: 1; min-width: 160px; padding: 10px 12px; font-family: inherit; font-size: 14px;
+      border: 1.5px solid var(--border); border-radius: 6px; color: var(--ink); box-sizing: border-box;
+      background-color: #fff; transition: border-color 0.15s ease;
+    }
+    .filter-row input[type="text"]:focus, .filter-row select:focus { outline: none; border-color: var(--teal); }
+
+    #dbStatus { color: var(--muted); font-size: 13.5px; margin-top: 10px; }
+    #loadingText { color: var(--teal); font-weight: 600; }
+
+    .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .status-text { color: var(--muted); font-size: 13.5px; }
+
+    .file-group { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; transition: box-shadow 0.15s ease; }
+    .file-group:hover { box-shadow: 0 2px 8px rgba(31, 41, 55, 0.06); }
+    .file-group:last-child { margin-bottom: 0; }
+    .file-group-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .file-group-name { font-weight: 700; font-size: 15px; color: var(--ink); }
+    .file-group-meta { font-size: 12.5px; color: var(--muted); }
+    .file-group-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .push-live-wrap { display: inline-flex; align-items: center; gap: 6px; }
+    .push-exam-type {
+      padding: 6px 8px; font-family: inherit; font-size: 12.5px;
+      border: 1.5px solid var(--border); border-radius: 5px; color: var(--ink); background-color: #fff;
+    }
+    .push-exam-type:focus { outline: none; border-color: var(--teal); }
+    .btn-push { background-color: var(--teal-dark); color: #fff; border: 1.5px solid var(--teal-dark); }
+    .btn-push:hover:not(:disabled) { opacity: 0.9; }
+    .push-status-text { font-size: 12.5px; margin-top: 6px; color: var(--muted); }
+
+    .q-picked-tag {
+      display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 600;
+      color: var(--teal-dark); background-color: var(--teal-tint); padding: 3px 8px; border-radius: 4px;
+    }
+    .q-edit-link { background: none; border: none; color: var(--teal); font-weight: 600; font-size: 12.5px; cursor: pointer; padding: 0; margin-top: 2px; }
+    .q-delete-link { color: var(--coral); margin-left: 14px; }
+
+    .q-subgroup-heading {
+      font-size: 12.5px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase;
+      letter-spacing: 0.03em; margin: 16px 0 8px; padding-top: 12px; border-top: 1px dashed var(--border);
+    }
+    .q-subgroup-heading:first-of-type { padding-top: 0; border-top: none; margin-top: 6px; }
+
+    .edit-form label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin: 10px 0 4px; }
+    .edit-form textarea, .edit-form input[type="text"], .edit-form select {
+      width: 100%; box-sizing: border-box; padding: 8px 10px; font-family: inherit; font-size: 13.5px;
+      border: 1.5px solid var(--border); border-radius: 5px; color: var(--ink);
+    }
+    .edit-form textarea:focus, .edit-form input:focus, .edit-form select:focus { outline: none; border-color: var(--teal); }
+    .edit-form .edit-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+    .curriculum-group-name { font-weight: 700; font-size: 15px; color: var(--teal-dark); }
+    .curriculum-group-meta { font-size: 12.5px; color: var(--muted); margin-left: 10px; font-weight: 600; }
+    .empty-note { color: var(--muted); font-size: 13.5px; font-style: italic; }
+
+    /* nested curriculum tree: board > standard > group > subject > file */
+    details.tree-level {
+      border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px;
+      margin-bottom: 12px; background-color: var(--card-bg);
+    }
+    details.tree-level:last-child { margin-bottom: 0; }
+    details.tree-level > summary {
+      cursor: pointer; list-style: none; display: flex; align-items: baseline;
+      padding: 4px 0;
+    }
+    details.tree-level > summary::-webkit-details-marker { display: none; }
+    details.tree-level > summary::before {
+      content: '\25B8'; display: inline-block; margin-right: 8px; color: var(--teal);
+      transition: transform 0.15s ease;
+    }
+    details.tree-level[open] > summary::before { transform: rotate(90deg); }
+    details.tree-level.tree-board { background-color: var(--teal-tint); }
+    details.tree-level.tree-standard { margin-left: 8px; margin-top: 10px; }
+    details.tree-level.tree-group { margin-left: 16px; margin-top: 10px; }
+    details.tree-level.tree-subject { margin-left: 24px; margin-top: 10px; background-color: #FAFBFC; }
+    .tree-file-group { margin-left: 12px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <a class="back-link" href="index.html">&larr; Back to Summary Generator</a>
+
+  <h1>Question <span>Database</span></h1>
+  <p class="app-subtitle">Browse the growing question bank, grouped by board, standard, group, subject, and source file.</p>
+
+  <div class="section">
+    <h2>Search</h2>
+    <div class="filter-row">
+      <input type="text" id="keywordSearch" aria-label="Search questions" placeholder="Search by question text, file name, board, standard, or subject...">
+    </div>
+    <div class="filter-row">
+      <select id="filterBoardSelect" aria-label="Filter by Board"></select>
+      <select id="filterStandardSelect" aria-label="Filter by Standard"></select>
+      <select id="filterGroupSelect" aria-label="Filter by Group" style="display:none;"></select>
+      <select id="filterSubjectSelect" aria-label="Filter by Subject"></select>
+    </div>
+    <p id="dbStatus">Loading questions...</p>
+  </div>
+
+  <div class="section">
+    <h2>Not Yet Grouped</h2>
+    <div class="filter-row">
+      <select id="boardSelect" aria-label="Select Board"></select>
+      <select id="standardSelect" aria-label="Select Standard"></select>
+      <select id="groupSelect" aria-label="Select Group" style="display:none;"></select>
+      <select id="subjectSelect" aria-label="Select Subject"></select>
+    </div>
+    <div class="toolbar">
+      <button id="tagSelectedBtn" class="btn btn-solid">Save Selected to Curriculum</button>
+      <span id="ungroupedStatus" class="status-text"></span>
+    </div>
+    <div id="ungroupedList"></div>
+  </div>
+
+  <div class="section">
+    <h2>Question Bank</h2>
+    <div id="groupedList"></div>
+  </div>
+
+  <script>
+    const API = (['localhost', '127.0.0.1', ''].includes(window.location.hostname))
+      ? 'http://127.0.0.1:8000'
+      : 'https://qn-generator-backend.onrender.com';
+
+    const BOARDS = [
+      'CBSE',
+      'Tamil Nadu State Board (Tamil Medium)',
+      'Tamil Nadu State Board (English Medium)'
+    ];
+    const STANDARDS = ['6th', '7th', '8th', '9th', '10th', '11th', '12th'];
+    const GROUPS = ['Bio Maths', 'Computer Science', 'Pure Science', 'Commerce'];
+
+    const SUBJECTS_DEFAULT = ['Tamil', 'English', 'Maths', 'Science', 'Social Science'];
+    const SUBJECTS_BY_GROUP = {
+      'Bio Maths': ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Biology'],
+      'Computer Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Mathematics', 'Computer Science'],
+      'Pure Science': ['Tamil', 'English', 'Physics', 'Chemistry', 'Botany', 'Zoology'],
+      'Commerce': ['Tamil', 'English', 'Commerce', 'Economics', 'Accountancy', 'Business Mathematics']
+    };
+
+    const LANGUAGE_CODE_MAP = {
+      'Tamil': 'TA001', 'English': 'EN002', 'Maths': 'MA003', 'Science': 'SC004',
+      'Social Science': 'SO005', 'Physics': 'PH006', 'Chemistry': 'CH007', 'Biology': 'BI008',
+      'Computer Science': 'CS009', 'Botany': 'BO010', 'Zoology': 'ZO011', 'Commerce': 'CO012',
+      'Economics': 'EC013', 'Accountancy': 'AC014', 'Business Mathematics': 'BM015'
+    };
+    const QUES_PREFIX_MAP = {
+      'Tamil': 'TA', 'English': 'EN', 'Maths': 'MA', 'Science': 'SC',
+      'Social Science': 'SO', 'Physics': 'PH', 'Chemistry': 'CH', 'Biology': 'BI',
+      'Computer Science': 'CS', 'Botany': 'BO', 'Zoology': 'ZO', 'Commerce': 'CO',
+      'Economics': 'EC', 'Accountancy': 'AC', 'Business Mathematics': 'BM', 'Mathematics': 'MA'
+    };
+    const ANSWER_LETTER_TO_NUM = { A: '1', B: '2', C: '3', D: '4' };
+    const TAMIL_CHAR_RE = /[\u0B80-\u0BFF]/;
+    function detectLnCode(questionText) {
+      return TAMIL_CHAR_RE.test(questionText || '') ? 'LN01' : 'LN02';
+    }
+
+    const el = (id) => document.getElementById(id);
+    const keywordSearch = el('keywordSearch');
+    const dbStatus = el('dbStatus');
+    const boardSelect = el('boardSelect'), standardSelect = el('standardSelect');
+    const groupSelect = el('groupSelect'), subjectSelect = el('subjectSelect');
+    const ungroupedList = el('ungroupedList'), groupedList = el('groupedList');
+    const tagSelectedBtn = el('tagSelectedBtn'), ungroupedStatus = el('ungroupedStatus');
+
+    const filterBoardSelect = el('filterBoardSelect'), filterStandardSelect = el('filterStandardSelect');
+    const filterGroupSelect = el('filterGroupSelect'), filterSubjectSelect = el('filterSubjectSelect');
+
+    let allQuestions = [];
+
+    function fillSelect(select, options, placeholder) {
+      select.innerHTML = '';
+      const ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = placeholder;
+      select.appendChild(ph);
+      options.forEach(value => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = value;
+        select.appendChild(opt);
+      });
+    }
+
+    function isSeniorStandard(standard) {
+      return standard === '11th' || standard === '12th';
+    }
+
+    function refreshStandardDependentUI() {
+      const senior = isSeniorStandard(standardSelect.value);
+      groupSelect.style.display = senior ? '' : 'none';
+      if (!senior) {
+        groupSelect.value = '';
+        fillSelect(subjectSelect, SUBJECTS_DEFAULT, 'Select subject');
+      } else {
+        const subjects = SUBJECTS_BY_GROUP[groupSelect.value] || [];
+        fillSelect(subjectSelect, subjects, subjects.length ? 'Select subject' : 'Select a group first');
+      }
+    }
+
+    fillSelect(boardSelect, BOARDS, 'Select board');
+    fillSelect(standardSelect, STANDARDS, 'Select standard');
+    fillSelect(groupSelect, GROUPS, 'Select group');
+    fillSelect(subjectSelect, SUBJECTS_DEFAULT, 'Select subject');
+
+    standardSelect.addEventListener('change', refreshStandardDependentUI);
+    groupSelect.addEventListener('change', refreshStandardDependentUI);
+
+    // ---- Search filter dropdowns (independent of the "Not Yet Grouped" curriculum picker above) ----
+    fillSelect(filterBoardSelect, BOARDS, 'All boards');
+    fillSelect(filterStandardSelect, STANDARDS, 'All standards');
+    fillSelect(filterGroupSelect, GROUPS, 'All groups');
+    fillSelect(filterSubjectSelect, SUBJECTS_DEFAULT, 'All subjects');
+
+    function isFilterSeniorStandard(standard) {
+      return standard === '11th' || standard === '12th';
+    }
+
+    function refreshFilterSubjectUI() {
+      const senior = isFilterSeniorStandard(filterStandardSelect.value);
+      filterGroupSelect.style.display = senior ? '' : 'none';
+      if (!senior) {
+        filterGroupSelect.value = '';
+        fillSelect(filterSubjectSelect, SUBJECTS_DEFAULT, 'All subjects');
+      } else {
+        const subjects = SUBJECTS_BY_GROUP[filterGroupSelect.value] || [];
+        fillSelect(filterSubjectSelect, subjects.length ? subjects : SUBJECTS_DEFAULT, 'All subjects');
+      }
+      applyFilters();
+    }
+
+    filterBoardSelect.addEventListener('change', applyFilters);
+    filterStandardSelect.addEventListener('change', refreshFilterSubjectUI);
+    filterGroupSelect.addEventListener('change', refreshFilterSubjectUI);
+    filterSubjectSelect.addEventListener('change', applyFilters);
+
+    function currentCurriculum() {
+      const standard = standardSelect.value;
+      const senior = isSeniorStandard(standard);
+      return {
+        board: boardSelect.value,
+        standard: standard,
+        group_name: senior ? groupSelect.value : '',
+        subject: subjectSelect.value
+      };
+    }
+
+    function groupByFile(questions) {
+      const groups = new Map();
+      questions.forEach(q => {
+        const key = q.batch_id || [
+          q.source_filename || 'unknown',
+          q.difficulty,
+          (q.created_at || '').slice(0, 16)
+        ].join('|');
+
+        if (!groups.has(key)) {
+          groups.set(key, {
+            source_filename: q.source_filename,
+            difficulty: q.difficulty,
+            created_at: q.created_at,
+            questions: []
+          });
+        }
+        groups.get(key).questions.push(q);
+      });
+      return Array.from(groups.values()).sort((a, b) =>
+        (b.created_at || '').localeCompare(a.created_at || '')
+      );
+    }
+
+    function buildCurriculumTree(questions) {
+      const boardsMap = new Map();
+      questions.forEach(q => {
+        const boardKey = q.board;
+        const standardKey = q.standard;
+        const groupKey = q.group_name || '';
+        const subjectKey = q.subject;
+        const fileKey = q.source_filename || 'Unknown file';
+
+        if (!boardsMap.has(boardKey)) boardsMap.set(boardKey, new Map());
+        const standardsMap = boardsMap.get(boardKey);
+
+        if (!standardsMap.has(standardKey)) standardsMap.set(standardKey, new Map());
+        const groupsMap = standardsMap.get(standardKey);
+
+        if (!groupsMap.has(groupKey)) groupsMap.set(groupKey, new Map());
+        const subjectsMap = groupsMap.get(groupKey);
+
+        if (!subjectsMap.has(subjectKey)) subjectsMap.set(subjectKey, new Map());
+        const filesMap = subjectsMap.get(subjectKey);
+
+        if (!filesMap.has(fileKey)) filesMap.set(fileKey, []);
+        filesMap.get(fileKey).push(q);
+      });
+      return boardsMap;
+    }
+
+    function countTreeQuestions(node) {
+      let total = 0;
+      if (node instanceof Map) {
+        for (const value of node.values()) { total += countTreeQuestions(value); }
+      } else if (Array.isArray(node)) {
+        total += node.length;
+      }
+      return total;
+    }
+
+    function buildOptionsHTML(q) {
+      let html = '';
+      for (const letter in q.options) {
+        html += '<div class="q-option' + (letter === q.answer ? ' correct' : '') + '">' +
+          letter + '. ' + q.options[letter] + '</div>';
+      }
+      return html;
+    }
+
+    function buildEditForm(q, onSaved) {
+      const form = document.createElement('div');
+      form.className = 'edit-form';
+      form.innerHTML =
+        '<label>Question</label><textarea rows="2" class="f-question"></textarea>' +
+        '<label>Option A</label><input type="text" class="f-a">' +
+        '<label>Option B</label><input type="text" class="f-b">' +
+        '<label>Option C</label><input type="text" class="f-c">' +
+        '<label>Option D</label><input type="text" class="f-d">' +
+        '<label>Correct answer</label><select class="f-answer"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select>' +
+        '<label>Explanation</label><textarea rows="2" class="f-explain"></textarea>' +
+        '<div class="edit-actions"><button class="btn btn-solid btn-small f-save">Save</button><button class="btn btn-outline btn-small f-cancel">Cancel</button></div>' +
+        '<p class="status-text f-status"></p>';
+
+      form.querySelector('.f-question').value = q.question;
+      form.querySelector('.f-a').value = q.options.A;
+      form.querySelector('.f-b').value = q.options.B;
+      form.querySelector('.f-c').value = q.options.C;
+      form.querySelector('.f-d').value = q.options.D;
+      form.querySelector('.f-answer').value = q.answer;
+      form.querySelector('.f-explain').value = q.explanation || '';
+
+      form.querySelector('.f-cancel').addEventListener('click', () => onSaved(null));
+      form.querySelector('.f-save').addEventListener('click', async () => {
+        const statusEl = form.querySelector('.f-status');
+        const payload = {
+          question: form.querySelector('.f-question').value.trim(),
+          options: {
+            A: form.querySelector('.f-a').value.trim(),
+            B: form.querySelector('.f-b').value.trim(),
+            C: form.querySelector('.f-c').value.trim(),
+            D: form.querySelector('.f-d').value.trim()
+          },
+          answer: form.querySelector('.f-answer').value,
+          explanation: form.querySelector('.f-explain').value.trim()
+        };
+        statusEl.textContent = 'Saving...';
+        try {
+          const r = await fetch(API + '/questions/' + q.id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!r.ok) {
+            const errData = await r.json();
+            throw new Error(errData.detail || ('Server error: ' + r.status));
+          }
+          Object.assign(q, payload);
+          onSaved(q);
+        } catch (err) {
+          statusEl.textContent = 'Could not save: ' + err.message;
+        }
+      });
+
+      return form;
+    }
+
+    function createQuestionCard(q, index, pickable) {
+      const card = document.createElement('div');
+      card.className = 'q-card' + (pickable.checked ? ' picked' : '');
+
+      const body = document.createElement('div');
+      body.className = 'q-card-body';
+
+      function renderReadOnly() {
+        body.innerHTML =
+          '<p class="q-text">Qn' + index + '. ' + q.question + '</p>' +
+          buildOptionsHTML(q) +
+          (q.explanation ? '<div class="q-explanation"><strong>Explanation:</strong> ' + q.explanation + '</div>' : '');
+        const editLink = document.createElement('button');
+        editLink.className = 'q-edit-link';
+        editLink.textContent = 'Edit';
+        editLink.addEventListener('click', () => {
+          body.innerHTML = '';
+          body.appendChild(buildEditForm(q, (updated) => {
+            renderReadOnly();
+          }));
+        });
+        body.appendChild(editLink);
+
+        const deleteLink = document.createElement('button');
+        deleteLink.className = 'q-edit-link q-delete-link';
+        deleteLink.textContent = 'Delete';
+        deleteLink.addEventListener('click', async () => {
+          if (!confirm('Permanently delete this question? This cannot be undone.')) return;
+          deleteLink.disabled = true;
+          deleteLink.textContent = 'Deleting...';
+          try {
+            const r = await fetch(API + '/questions/' + q.id, { method: 'DELETE' });
+            if (!r.ok) {
+              const errData = await r.json().catch(() => ({}));
+              throw new Error(errData.detail || ('Server error: ' + r.status));
+            }
+            await loadQuestions();
+          } catch (err) {
+            alert('Could not delete this question: ' + err.message);
+            deleteLink.disabled = false;
+            deleteLink.textContent = 'Delete';
+          }
+        });
+        body.appendChild(deleteLink);
+      }
+      renderReadOnly();
+
+      const pickWrap = document.createElement('div');
+      pickWrap.className = 'q-pick-wrap';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'q-pick';
+      checkbox.checked = pickable.checked;
+      checkbox.dataset.qid = q.id;
+      checkbox.addEventListener('change', () => {
+        card.classList.toggle('picked', checkbox.checked);
+        if (pickable.onChange) { pickable.onChange(q.id, checkbox.checked); }
+      });
+      pickWrap.appendChild(checkbox);
+
+      const row = document.createElement('div');
+      row.className = 'q-card-row';
+      row.appendChild(body);
+      row.appendChild(pickWrap);
+      card.appendChild(row);
+      return card;
+    }
+
+    function renderUngrouped(questions) {
+      ungroupedList.innerHTML = '';
+      if (questions.length === 0) {
+        ungroupedList.innerHTML = '<p class="empty-note">Nothing waiting to be tagged right now.</p>';
+        ungroupedStatus.textContent = '';
+        return;
+      }
+
+      const groups = groupByFile(questions);
+      groups.forEach(group => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'file-group';
+
+        const timestamp = group.created_at ? group.created_at.replace('T', ' ').slice(0, 19) : 'Unknown time';
+        const header = document.createElement('div');
+        header.className = 'file-group-header';
+        header.innerHTML =
+          '<span class="file-group-name">' + (group.source_filename || 'Unknown file') + '</span>' +
+          '<span class="file-group-meta">' + group.difficulty + ' &middot; ' +
+          group.questions.length + ' question(s) &middot; ' + timestamp + '</span>';
+        groupEl.appendChild(header);
+
+        group.questions.forEach((q, i) => {
+          groupEl.appendChild(createQuestionCard(q, i + 1, { checked: false, onChange: updateUngroupedStatus }));
+        });
+
+        ungroupedList.appendChild(groupEl);
+      });
+
+      updateUngroupedStatus();
+    }
+
+    function updateUngroupedStatus() {
+      const total = ungroupedList.querySelectorAll('.q-pick').length;
+      const picked = ungroupedList.querySelectorAll('.q-pick:checked').length;
+      ungroupedStatus.textContent = picked + ' of ' + total + ' question(s) ticked.';
+    }
+
+    tagSelectedBtn.addEventListener('click', async () => {
+      const curriculum = currentCurriculum();
+      if (!curriculum.board || !curriculum.standard || !curriculum.subject) {
+        alert('Pick a board, standard, and subject above before saving.');
+        return;
+      }
+      if (isSeniorStandard(curriculum.standard) && !curriculum.group_name) {
+        alert('Pick a group (Bio Maths / Computer Science / Pure Science / Commerce) for 11th/12th before saving.');
+        return;
+      }
+      const checkedBoxes = Array.from(ungroupedList.querySelectorAll('.q-pick:checked'));
+      if (checkedBoxes.length === 0) {
+        alert('Tick at least one question first.');
+        return;
+      }
+      const questionIds = checkedBoxes.map(cb => Number.parseInt(cb.dataset.qid, 10));
+
+      tagSelectedBtn.disabled = true;
+      tagSelectedBtn.textContent = 'Saving...';
+      try {
+        const response = await fetch(API + '/questions/tag', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question_ids: questionIds, ...curriculum })
+        });
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.detail || ('Server error: ' + response.status));
+        }
+        await loadQuestions();
+      } catch (err) {
+        alert('Could not save selection: ' + err.message);
+      } finally {
+        tagSelectedBtn.disabled = false;
+        tagSelectedBtn.textContent = 'Save Selected to Curriculum';
+      }
+    });
+
+    function downloadAsText(questions, label) {
+      let text = 'Questions (' + label + ')\n' + '='.repeat(40) + '\n\n';
+      questions.forEach((q, i) => {
+        text += (i + 1) + '. ' + q.question + '\n';
+        for (const letter in q.options) text += '   ' + letter + '. ' + q.options[letter] + '\n';
+        text += '   Correct Answer: ' + q.answer + '\n';
+        if (q.explanation) text += '   Explanation: ' + q.explanation + '\n';
+        text += '\n';
+      });
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'questions_' + label + '_' + stamp + '.txt';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadAsJSON(questions, label) {
+      const nowISO = new Date().toISOString();
+      const codeCounters = {};
+      const formatted = questions.map((q) => {
+        const fallbackPrefix = (q.dy_code || 'AI').trim().toUpperCase();
+        codeCounters[fallbackPrefix] = (codeCounters[fallbackPrefix] || 0) + 1;
+        const num = String(codeCounters[fallbackPrefix]).padStart(3, '0');
+        return {
+          "dy_ques_id": q.dy_ques_id || `${fallbackPrefix}${num}`,
+          "dy_code": "AITSB7S01",
+          "ln_code": detectLnCode(q.question),
+          "dy_order": q.dy_order != null ? String(q.dy_order) : String(subjectCounters[prefix]),
+          "dy_pattern": 1,
+          "dy_seconds": 18,
+          "dy_question": q.question || "",
+          "dy_image_name": "",
+          "dy_ans_1": q.options ? (q.options.A || "") : "",
+          "dy_ans_2": q.options ? (q.options.B || "") : "",
+          "dy_ans_3": q.options ? (q.options.C || "") : "",
+          "dy_ans_4": q.options ? (q.options.D || "") : "",
+          "dy_correct_ans": ANSWER_LETTER_TO_NUM[q.answer] || "",
+          "dy_explain": q.explanation || "",
+          "dy_explain_image_name": "",
+          "created_at": q.created_at || nowISO,
+          "updated_at": null
+        };
+      });
+      const jsonString = JSON.stringify(formatted, null, 2);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'questions_' + label + '_' + stamp + '.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function pushQuestionsToLive(dyQuesIds, examType, statusEl, btnEl, baseLabel) {
+      if (dyQuesIds.length === 0) {
+        statusEl.textContent = 'Nothing to push - none of these questions have a dy_ques_id yet.';
+        statusEl.style.color = 'var(--coral)';
+        return;
+      }
+      if (!confirm('Push ' + dyQuesIds.length + ' question(s) to the LIVE "' + examType + '" database? This cannot be undone.')) {
+        return;
+      }
+      btnEl.disabled = true;
+      btnEl.textContent = 'Pushing...';
+      statusEl.textContent = '';
+      try {
+        const r = await fetch(API + '/push-to-live', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ exam_type: examType, dy_ques_ids: dyQuesIds })
+        });
+        const data = await r.json();
+        if (!r.ok) { throw new Error(data.detail || ('Server error: ' + r.status)); }
+        statusEl.textContent = 'Pushed ' + data.pushed_count + ', skipped ' + data.skipped_already_pushed +
+          ' (already live), failed ' + data.failed_count + '.';
+        statusEl.style.color = data.failed_count ? 'var(--coral)' : 'var(--teal-dark)';
+        if (data.failed_count) {
+          console.warn('push-to-live failures', data.failed);
+        }
+      } catch (err) {
+        statusEl.textContent = 'Could not push to live: ' + err.message;
+        statusEl.style.color = 'var(--coral)';
+      } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = baseLabel;
+      }
+    }
+
+    function buildFileBox(fileKey, fileQuestions) {
+      const ordered = fileQuestions.slice().sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+
+      const fileBox = document.createElement('div');
+      fileBox.className = 'file-group tree-file-group';
+
+      const header = document.createElement('div');
+      header.className = 'file-group-header';
+      header.innerHTML =
+        '<span class="file-group-name">' + fileKey + '</span>' +
+        '<span class="file-group-meta">' + ordered.length + ' unique question(s)</span>';
+      fileBox.appendChild(header);
+
+      const selectedIds = new Set(ordered.filter(q => q.selected).map(q => q.id));
+
+      const selectionLine = document.createElement('p');
+      selectionLine.className = 'status-text';
+      function updateSelectionLine() {
+        selectionLine.textContent = selectedIds.size + ' of ' + ordered.length + ' question(s) saved to your selection (highlighted).';
+      }
+      updateSelectionLine();
+
+      const makePickable = (q) => ({
+        checked: q.selected,
+        onChange: (qid, isChecked) => {
+          if (isChecked) { selectedIds.add(qid); } else { selectedIds.delete(qid); }
+          updateSelectionLine();
+        }
+      });
+
+      const selectedQuestions = ordered.filter(q => q.selected);
+      const notSelectedQuestions = ordered.filter(q => !q.selected);
+
+      if (selectedQuestions.length) {
+        const heading = document.createElement('p');
+        heading.className = 'q-subgroup-heading';
+        heading.textContent = 'Selected (' + selectedQuestions.length + ')';
+        fileBox.appendChild(heading);
+        selectedQuestions.forEach((q, i) => {
+          fileBox.appendChild(createQuestionCard(q, i + 1, makePickable(q)));
+        });
+      }
+
+      if (notSelectedQuestions.length) {
+        const heading = document.createElement('p');
+        heading.className = 'q-subgroup-heading';
+        heading.textContent = 'Not selected (' + notSelectedQuestions.length + ')';
+        fileBox.appendChild(heading);
+        notSelectedQuestions.forEach((q, i) => {
+          fileBox.appendChild(createQuestionCard(q, i + 1, makePickable(q)));
+        });
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'file-group-actions';
+
+      const downloadLabel = (fileKey || 'file').replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]+/g, '_');
+
+      const downloadTxtBtn = document.createElement('button');
+      downloadTxtBtn.className = 'btn btn-outline btn-small';
+      downloadTxtBtn.textContent = 'Download All TXT (' + ordered.length + ')';
+      downloadTxtBtn.addEventListener('click', () => downloadAsText(ordered, downloadLabel));
+
+      const downloadJsonBtn = document.createElement('button');
+      downloadJsonBtn.className = 'btn btn-outline btn-small';
+      downloadJsonBtn.textContent = 'Download All JSON (' + ordered.length + ')';
+      downloadJsonBtn.addEventListener('click', () => downloadAsJSON(ordered, downloadLabel));
+
+      const saveSelectionBtn = document.createElement('button');
+      saveSelectionBtn.className = 'btn btn-solid btn-small';
+      saveSelectionBtn.textContent = 'Save Selection (' + selectedIds.size + ')';
+      saveSelectionBtn.addEventListener('click', async () => {
+        const allIds = ordered.map(q => q.id);
+        const toSelect = allIds.filter(id => selectedIds.has(id));
+        const toDeselect = allIds.filter(id => !selectedIds.has(id) && ordered.find(q => q.id === id).selected);
+
+        saveSelectionBtn.disabled = true;
+        saveSelectionBtn.textContent = 'Saving...';
+
+        const requests = [];
+        if (toSelect.length) {
+          requests.push(fetch(API + '/questions/tag', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question_ids: toSelect })
+          }));
+        }
+        if (toDeselect.length) {
+          requests.push(fetch(API + '/questions/deselect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question_ids: toDeselect })
+          }));
+        }
+
+        try {
+          const responses = await Promise.all(requests);
+          const failed = responses.find(r => !r.ok);
+          if (failed) { throw new Error('Server error: ' + failed.status); }
+          await loadQuestions();
+        } catch (err) {
+          alert('Could not save your selection: ' + err.message);
+        } finally {
+          saveSelectionBtn.disabled = false;
+          saveSelectionBtn.textContent = 'Save Selection (' + selectedIds.size + ')';
+        }
+      });
+
+      const removeGroupBtn = document.createElement('button');
+      removeGroupBtn.className = 'btn btn-danger btn-small';
+      removeGroupBtn.textContent = 'Move unticked to Not Selected';
+      removeGroupBtn.title = 'Deselects the unticked questions but keeps them tagged to the same board / standard / group / subject - they will show up under "Not selected" here, not in Not Yet Grouped.';
+      removeGroupBtn.addEventListener('click', async () => {
+        const uncheckedIds = Array.from(fileBox.querySelectorAll('.q-pick:not(:checked)'))
+          .map(cb => Number.parseInt(cb.dataset.qid, 10));
+        if (uncheckedIds.length === 0) {
+          alert('Nothing was unticked in this file.');
+          return;
+        }
+        removeGroupBtn.disabled = true;
+        removeGroupBtn.textContent = 'Updating...';
+        try {
+          const r = await fetch(API + '/questions/deselect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question_ids: uncheckedIds })
+          });
+          if (!r.ok) { throw new Error('Server error: ' + r.status); }
+          await loadQuestions();
+        } catch (err) {
+          alert('Could not update this file group: ' + err.message);
+          removeGroupBtn.disabled = false;
+          removeGroupBtn.textContent = 'Move unticked to Not Selected';
+        }
+      });
+
+      const pushWrap = document.createElement('span');
+      pushWrap.className = 'push-live-wrap';
+
+      const examTypeSelect = document.createElement('select');
+      examTypeSelect.className = 'push-exam-type';
+      examTypeSelect.setAttribute('aria-label', 'Live exam type for ' + fileKey);
+      [['daily', 'Daily'], ['online', 'Online'], ['schedule', 'Schedule']].forEach(([value, label]) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        examTypeSelect.appendChild(opt);
+      });
+
+      const pushBtnLabel = 'Push to Live (' + ordered.length + ')';
+      const pushBtn = document.createElement('button');
+      pushBtn.className = 'btn btn-push btn-small';
+      pushBtn.textContent = pushBtnLabel;
+      pushBtn.title = 'Sends every question in this file/group to the live exam database.';
+
+      const pushStatus = document.createElement('p');
+      pushStatus.className = 'push-status-text';
+
+      pushBtn.addEventListener('click', () => {
+        const dyQuesIds = ordered.map(q => q.dy_ques_id).filter(Boolean);
+        pushQuestionsToLive(dyQuesIds, examTypeSelect.value, pushStatus, pushBtn, pushBtnLabel);
+      });
+
+      pushWrap.appendChild(examTypeSelect);
+      pushWrap.appendChild(pushBtn);
+
+      actions.appendChild(downloadTxtBtn);
+      actions.appendChild(downloadJsonBtn);
+      actions.appendChild(saveSelectionBtn);
+      actions.appendChild(removeGroupBtn);
+      actions.appendChild(pushWrap);
+      fileBox.appendChild(actions);
+      fileBox.appendChild(selectionLine);
+      fileBox.appendChild(pushStatus);
+      return fileBox;
+    }
+
+    function buildTreeLevel(label, count, extraClass) {
+      const details = document.createElement('details');
+      details.className = 'tree-level' + (extraClass ? ' ' + extraClass : '');
+      const summary = document.createElement('summary');
+      summary.innerHTML = '<span class="curriculum-group-name">' + label + '</span>' +
+        '<span class="curriculum-group-meta">' + count + ' question(s)</span>';
+      details.appendChild(summary);
+      return details;
+    }
+
+    function renderGrouped(questions) {
+      groupedList.innerHTML = '';
+      const tagged = questions.filter(q => q.board);
+      if (tagged.length === 0) {
+        groupedList.innerHTML = '<p class="empty-note">No questions have been saved under a curriculum yet.</p>';
+        return;
+      }
+
+      const tree = buildCurriculumTree(tagged);
+      const sortedBoards = Array.from(tree.keys()).sort();
+
+      sortedBoards.forEach(boardKey => {
+        const standardsMap = tree.get(boardKey);
+        const boardDetails = buildTreeLevel(boardKey, countTreeQuestions(standardsMap), 'tree-board');
+        boardDetails.open = sortedBoards.length === 1;
+
+        Array.from(standardsMap.keys()).sort().forEach(standardKey => {
+          const groupsMap = standardsMap.get(standardKey);
+          const standardDetails = buildTreeLevel(standardKey + ' Standard', countTreeQuestions(groupsMap), 'tree-standard');
+
+          Array.from(groupsMap.keys()).sort().forEach(groupKey => {
+            const subjectsMap = groupsMap.get(groupKey);
+            let subjectsParent = standardDetails;
+            if (groupKey) {
+              const groupDetails = buildTreeLevel(groupKey, countTreeQuestions(subjectsMap), 'tree-group');
+              standardDetails.appendChild(groupDetails);
+              subjectsParent = groupDetails;
+            }
+
+            Array.from(subjectsMap.keys()).sort().forEach(subjectKey => {
+              const filesMap = subjectsMap.get(subjectKey);
+              const subjectDetails = buildTreeLevel(subjectKey, countTreeQuestions(filesMap), 'tree-subject');
+
+              Array.from(filesMap.keys()).sort().forEach(fileKey => {
+                subjectDetails.appendChild(buildFileBox(fileKey, filesMap.get(fileKey)));
+              });
+
+              subjectsParent.appendChild(subjectDetails);
+            });
+          });
+
+          boardDetails.appendChild(standardDetails);
+        });
+
+        groupedList.appendChild(boardDetails);
+      });
+    }
+
+    function renderAll(questions) {
+      renderUngrouped(questions.filter(q => !q.board));
+      renderGrouped(questions);
+    }
+
+    function applyFilters() {
+      const keyword = keywordSearch.value.trim().toLowerCase();
+      const fBoard = filterBoardSelect.value;
+      const fStandard = filterStandardSelect.value;
+      const fGroup = filterGroupSelect.value;
+      const fSubject = filterSubjectSelect.value;
+
+      const filtered = allQuestions.filter(q => {
+        if (fBoard && q.board !== fBoard) return false;
+        if (fStandard && q.standard !== fStandard) return false;
+        if (fGroup && q.group_name !== fGroup) return false;
+        if (fSubject && q.subject !== fSubject) return false;
+        if (!keyword) return true;
+        const haystack = [
+          q.question, q.source_filename, q.difficulty,
+          q.board, q.standard, q.group_name, q.subject, q.language_code,
+          q.options ? Object.values(q.options).join(' ') : '',
+          q.explanation
+        ].join(' ').toLowerCase();
+        return haystack.includes(keyword);
+      });
+
+      dbStatus.textContent = filtered.length === allQuestions.length
+        ? allQuestions.length + ' question(s) in the database.'
+        : filtered.length + ' of ' + allQuestions.length + ' question(s) shown.';
+      renderAll(filtered);
+    }
+
+    keywordSearch.addEventListener('input', applyFilters);
+
+    const ANSWER_NUM_TO_LETTER = { '1': 'A', '2': 'B', '3': 'C', '4': 'D' };
+
+    function normalizeQuestion(q) {
+      q.question = q.dy_question;
+      q.options = { A: q.dy_ans_1, B: q.dy_ans_2, C: q.dy_ans_3, D: q.dy_ans_4 };
+      q.answer = ANSWER_NUM_TO_LETTER[q.dy_correct_ans] || q.dy_correct_ans;
+      q.explanation = q.dy_explain;
+      return q;
+    }
+
+    async function loadQuestions() {
+      dbStatus.textContent = 'Loading questions...';
+      try {
+        const r = await fetch(API + '/questions');
+        if (!r.ok) { throw new Error('Server error: ' + r.status); }
+        const data = await r.json();
+        allQuestions = data.questions.map(normalizeQuestion);
+        applyFilters();
+      } catch (err) {
+        dbStatus.textContent = 'Something went wrong: ' + err.message;
+      }
+    }
+
+    loadQuestions();
+  </script>
+
+</body>
+</html>

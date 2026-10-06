@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+aiofiles
+httpx
+sqlalchemy
+pydantic
+google-genai
+PyMuPDF
+pytesseract
+Pillow
+python-docx
+python-pptx
+reportlab>=4.0.0

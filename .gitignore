@@ -1,0 +1,15 @@
+# Never commit real API keys
+.env
+credentials.txt
+
+# Local Python files
+venv/
+__pycache__/
+*.pyc
+
+# Local database and generated files
+questions.db
+questions.db-shm
+questions.db-wal
+generated_pdfs/
+*.tmp.pdf
